@@ -6,7 +6,7 @@ from telegram.ext import Application, CommandHandler, ContextTypes
 from docx import Document
 
 # توكن البوت ومعرف الأدمن الخاص بك
-TOKEN = "8789485311:AAHlP1GDBu5Kr0sJe0y8JkHFDEot9wOQXlg"
+TOKEN = "8789485311:AAFHPlGDBu5Kr0sJe0y8JkHFDE0t9wOQXLg"
 
 ADMIN_ID = 5859090443
 
