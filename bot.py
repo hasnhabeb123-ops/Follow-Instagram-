@@ -17,12 +17,11 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# --- 1. قاعدة البيانات (بنفس الاسم القديم لضمان الاستقرار) ---
+# --- 1. قاعدة البيانات الاحترافية ---
 def init_db():
     conn = sqlite3.connect('bot_database.db')
     cursor = conn.cursor()
     
-    # جدول المستخدمين والأرصدة
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS users (
             user_id INTEGER PRIMARY KEY,
@@ -31,7 +30,6 @@ def init_db():
         )
     ''')
     
-    # جدول السياق النشط والذاكرة
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS user_active_context (
             user_id INTEGER PRIMARY KEY,
@@ -80,7 +78,7 @@ def get_active_context(user_id):
     conn.close()
     return row[0] if row else None
 
-# دالة لضبط اتجاه النص لليمين (RTL) في ملفات الـ Word
+# دالة لضبط اتجاه النص لليمين (RTL) واحترافية الفقرات
 def set_rtl(paragraph):
     pPr = paragraph._element.get_or_add_pPr()
     bidi = OxmlElement('w:bidi')
@@ -88,7 +86,7 @@ def set_rtl(paragraph):
     pPr.append(bidi)
     paragraph.alignment = 2
 
-# --- 2. معالج الدردشة الذكية الحرة ---
+# --- 2. معالج المحادثة والذكاء المستقل ---
 async def handle_free_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     user_message = update.message.text
@@ -97,12 +95,12 @@ async def handle_free_message(update: Update, context: ContextTypes.DEFAULT_TYPE
     msg_lower = user_message.lower()
     
     # فحص الرصيد
-    if "رصيد" in msg_lower or "كم معي" in msg_lower:
-        await update.message.reply_text(f"💰 رصيدك الحالي يا أبو عدي هو: **{balance} عملة**", parse_mode="Markdown")
+    if "رصيد" in msg_lower or "كم معي" in msg_lower or "رصيدي" in msg_lower:
+        await update.message.reply_text(f"💰 رصيدك الحالي يا {user.first_name} هو: **{balance} عملة**", parse_mode="Markdown")
         return
 
-    # طلب إنشاء تقرير أو مستند أو جدول
-    if any(word in msg_lower for word in ["تقرير", "ملف", "اعملي", "صمم", "جدول"]):
+    # التحقق إذا كان الطلب يتضمن إنشاء جدول أو مستند
+    if any(word in msg_lower for word in ["تقرير", "ملف", "اعملي", "صمم", "جدول", "حط", "سوي"]):
         if balance < 1:
             await update.message.reply_text("❌ رصيدك غير كافي! تحتاج إلى عملة واحدة على الأقل لتوليد المستندات.")
             return
@@ -110,43 +108,59 @@ async def handle_free_message(update: Update, context: ContextTypes.DEFAULT_TYPE
         update_balance(user.id, -1)
         set_active_context(user.id, user_message)
         
-        await update.message.reply_text("🤖 جاري تحليل طلبك، تجهيز الهيكلية، وتصميم المستند الاحترافي مع الجداول...")
+        await update.message.reply_text(f"🤖 أهلاً بك يا {user.first_name}، جاري تحليل طلبك بدقة وتصميم جدولك الاحترافي...")
 
         doc = Document()
         
-        p1 = doc.add_heading('المستند الذكي الاحترافي', 0)
+        # عنوان رئيسي للمستند
+        p1 = doc.add_heading('المستند التنفيذي الذكي', 0)
         set_rtl(p1)
         
-        p2 = doc.add_heading('موضوع الطلب:', level=1)
+        p2 = doc.add_heading('تفاصيل الطلب:', level=1)
         set_rtl(p2)
         
         p3 = doc.add_paragraph(user_message)
         set_rtl(p3)
         
-        # إضافة جدول احترافي منسق
-        p_table_title = doc.add_heading('جدول البيانات والتحليل:', level=1)
+        p_table_title = doc.add_heading('الجدول الإحصائي والبياني:', level=1)
         set_rtl(p_table_title)
         
-        table = doc.add_table(rows=3, cols=3)
-        table.style = 'Table Grid'
-        
-        headers = ["البند / البيان", "التفاصيل", "الحالة"]
-        for i, h in enumerate(headers):
-            cell = table.cell(0, i)
-            cell.text = h
-            set_rtl(cell.paragraphs[0])
+        # تحليل ذكي للحقول بناءً على طلب المستخدم (اسم، هاتف، هوية)
+        if "هاتف" in msg_lower or "هوية" in msg_lower or "اسم" in msg_lower:
+            headers = ["الاسم الثلاثي", "رقم الهاتف", "رقم الهوية"]
+            table = doc.add_table(rows=3, cols=3)
+            table.style = 'Table Grid'
             
-        row1 = ["البند الرئيسي الأول", "تمت المراجعة والتنفيذ", "جاهز"]
-        for i, val in enumerate(row1):
-            cell = table.cell(1, i)
-            cell.text = val
-            set_rtl(cell.paragraphs[0])
+            # تعبئة الهيدر
+            for i, h in enumerate(headers):
+                cell = table.cell(0, i)
+                cell.text = h
+                set_rtl(cell.paragraphs[0])
+                
+            # صف تجريبي أول
+            row1 = ["أدخل الاسم هنا...", "09xxxxxxxx", "00000000000"]
+            for i, val in enumerate(row1):
+                cell = table.cell(1, i)
+                cell.text = val
+                set_rtl(cell.paragraphs[0])
 
-        row2 = ["التوصيات والتحليل", "مطابق للمعايير", "معتمد"]
-        for i, val in enumerate(row2):
-            cell = table.cell(2, i)
-            cell.text = val
-            set_rtl(cell.paragraphs[0])
+            # صف تجريبي ثاني
+            row2 = ["فارغ للتعبئة", "09xxxxxxxx", "00000000000"]
+            for i, val in enumerate(row2):
+                cell = table.cell(2, i)
+                cell.text = val
+                set_rtl(cell.paragraphs[0])
+        else:
+            # جدول عام افتراضي لو طلب شي آخر
+            table = doc.add_table(rows=2, cols=2)
+            table.style = 'Table Grid'
+            table.cell(0, 0).text = "البند الرئيسي"
+            table.cell(0, 1).text = "التفاصيل والمحتوى"
+            table.cell(1, 0).text = user_message
+            table.cell(1, 1).text = "جاهز ومعتمد"
+            for row in table.rows:
+                for cell in row.cells:
+                    set_rtl(cell.paragraphs[0])
 
         file_path = f"smart_doc_{user.id}.docx"
         doc.save(file_path)
@@ -154,37 +168,28 @@ async def handle_free_message(update: Update, context: ContextTypes.DEFAULT_TYPE
         with open(file_path, 'rb') as f:
             await update.message.reply_document(
                 document=f,
-                filename="Professional_Document.docx",
-                caption="✅ تفضل المستند الاحترافي جاهز مع الجداول وتنسيق RTL السليم!"
+                filename="Professional_Table.docx",
+                caption=f"✅ تفضل يا {user.first_name}! تم إعداد الجدول بالهيكلية المطلوبة وبتنسيق RTL الاحترافي."
             )
 
         if os.path.exists(file_path):
             os.remove(file_path)
         return
 
-    # طلب التعديل بناءً على السياق السابق
+    # طلب التعديل التفاعلي
     if any(word in msg_lower for word in ["عدل", "ضيف", "احذف", "غير"]):
         last_topic = get_active_context(user.id)
-        
         if not last_topic:
-            await update.message.reply_text("🤔 ما في طلب سابق مسجل بالذاكرة لحتى أعدل عليه. اطلب مني إنشاء ملف أولاً!")
+            await update.message.reply_text("🤔 لا يوجد طلب سابق مسجل بالذاكرة. اطلب مني إنشاء ملف أو جدول أولاً!")
             return
             
-        await update.message.reply_text(f"🔄 جاري تعديل المستند السابق ('{last_topic}') بناءً على طلبك: '{user_message}'...")
+        await update.message.reply_text(f"🔄 جاري تحديث المستند السابق بناءً على طلبك الجديد...")
         
         doc = Document()
         p1 = doc.add_heading('المستند المحدث ذكياً', 0)
         set_rtl(p1)
-        
-        p2 = doc.add_heading('السياق الأصلي:', level=1)
+        p2 = doc.add_paragraph(f"التعديل بناءً على طلبك الأخير: {user_message}")
         set_rtl(p2)
-        p3 = doc.add_paragraph(last_topic)
-        set_rtl(p3)
-        
-        p4 = doc.add_heading('التعديلات المضافة:', level=1)
-        set_rtl(p4)
-        p5 = doc.add_paragraph(user_message)
-        set_rtl(p5)
         
         file_path = f"updated_doc_{user.id}.docx"
         doc.save(file_path)
@@ -193,25 +198,27 @@ async def handle_free_message(update: Update, context: ContextTypes.DEFAULT_TYPE
             await update.message.reply_document(
                 document=f,
                 filename="Updated_Document.docx",
-                caption="✅ تفضل النسخة المحدثة بناءً على طلبك!"
+                caption="✅ تفضل النسخة المحدثة جاهزة!"
             )
-            
         if os.path.exists(file_path):
             os.remove(file_path)
         return
 
-    # دردشة عامة
-    await update.message.reply_text(f"أهلاً يا أبو عدي! أنا معك. فهمت أنك تقصد: \"{user_message}\". هل تحب أن أبدأ بتوليد مستند أو تقرير بناءً على هذا الكلام؟")
+    # رد افتراضي ذكي عام لأي مستخدم
+    await update.message.reply_text(
+        f"أهلاً بك يا {user.first_name}! أنا مساعدك الذكي للمستندات والجداول. "
+        f"يمكنك طلب أي تقرير، جدول (مثل الاسم، الهاتف، الهوية)، أو مستند وسأقوم بتصميمه لك فوراً وبشكل احترافي!"
+    )
 
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     balance = get_or_create_user(user.id, user.username)
     welcome_msg = (
-        f"أهلاً بك يا {user.first_name} في المساعد الذكي للمستندات والجداول 🚀\n\n"
-        f"💰 رصيدك: **{balance} عملة**\n\n"
-        f"💬 **تحدث معي مباشرة بالدردشة الحرة:**\n"
-        f"• قل لي: *'اعملي تقرير مبيعات'* وسأقوم بتصميمه فوراً.\n"
-        f"• أو: *'أضف لي كذا'* وسأقوم بالتعديل على السياق بسلاسة!"
+        f"أهلاً بك يا {user.first_name} في المساعد الذكي للمستندات والجداول الاحترافية 🚀\n\n"
+        f"💰 رصيدك الحالي: **{balance} عملة**\n\n"
+        f"💬 **تحدث معي بحرية تامة:**\n"
+        f"• اطلب مني جدولاً بالشكل الذي تريده (مثلاً: *'اعملي جدول فيه الاسم الثلاثي ورقم الهاتف ورقم الهوية'*).\n"
+        f"• أو اطلب تقارير ومستندات وسأقوم بتصميمها خصيصاً لك!"
     )
     await update.message.reply_text(welcome_msg, parse_mode="Markdown")
 
@@ -223,7 +230,7 @@ def main():
     application.add_handler(CommandHandler("start", start_command))
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_free_message))
 
-    print("Smart AI Document Assistant is running...")
+    print("Independent AI Document Assistant is running...")
     application.run_polling()
 
 if __name__ == "__main__":
