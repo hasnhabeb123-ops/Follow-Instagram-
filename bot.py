@@ -7,6 +7,7 @@ from docx import Document
 
 # توكن البوت ومعرف الأدمن الخاص بك
 TOKEN = "8789485311:AAHlP1GDBu5Kr0sJe0y8JkHFDEot9wOQXlg"
+
 ADMIN_ID = 5859090443
 
 # إعدادات التسجيل لمتابعة الأخطاء
