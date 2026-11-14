@@ -1,198 +1,91 @@
+import logging
+import sqlite3
+from telegram import Update
+from telegram.ext import Application, CommandHandler, ContextTypes
 
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardMarkup, KeyboardButton
-from telegram.ext import Application, CommandHandler, CallbackQueryHandler, MessageHandler, filters, ContextTypes
-
-TOKEN = "8789485311:AAFHPlGDBu5Kr0sJe0y8JkHFDE0t9wOQXLg"
+# توكن البوت ومعرف الأدمن الخاص بك
+TOKEN = "8789485311:AAHlP1GDBu5Kr0sJe0y8JkHFDEot9w"
 ADMIN_ID = 5859090443
 
-# --- أسعار المتابعين ---
-PRICES = {f"{i}_followers": f"{i*20}" for i in range(100, 10001, 100)}
-PAGE_SIZE = 10
+# إعدادات التسجيل لمتابعة الأخطاء
+logging.basicConfig(
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=logging.INFO
+)
+logger = logging.getLogger(__name__)
 
-orders = {}
-order_id_counter = 1
+# --- 1. إعداد قاعدة البيانات ---
+def init_db():
+    conn = sqlite3.connect('bot_database.db')
+    cursor = conn.cursor()
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS users (
+            user_id INTEGER PRIMARY KEY,
+            username TEXT,
+            balance INTEGER DEFAULT 5
+        )
+    ''')
+    conn.commit()
+    conn.close()
 
-# --- Pagination ---
-def get_page_keyboard(page=0):
-    keys = list(PRICES.keys())
-    start = page * PAGE_SIZE
-    end = start + PAGE_SIZE
-    kb = []
-    for key in keys[start:end]:
-        kb.append([InlineKeyboardButton(f"{key.split('_')[0]} متابع - {PRICES[key]} ليرة", callback_data=key)])
-    nav = []
-    if start > 0:
-        nav.append(InlineKeyboardButton("⬅️", callback_data=f"prev_{page}"))
-    if end < len(keys):
-        nav.append(InlineKeyboardButton("➡️", callback_data=f"next_{page}"))
-    if nav:
-        kb.append(nav)
-    return InlineKeyboardMarkup(kb)
-
-# --- بدء ---
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    # زر البداية
-    kb_menu = [[KeyboardButton("/start")]]
-    reply_m = ReplyKeyboardMarkup(kb_menu, resize_keyboard=True)
-
-    await update.message.reply_text("اختر العرض:", reply_markup=get_page_keyboard(0))
-    await update.message.reply_text("اضغط على /start للرجوع للبداية في أي وقت 👇", reply_markup=reply_m)
-
-# --- أزرار ---
-async def buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    await query.answer()
-    data = query.data
-
-    # Pagination
-    if data.startswith("next_") or data.startswith("prev_"):
-        page = int(data.split("_")[1])
-        page = page+1 if "next" in data else page-1
-        await query.edit_message_reply_markup(reply_markup=get_page_keyboard(page))
-        return
-
-    # اختيار خدمة
-    if "_followers" in data:
-        context.user_data["service"] = data
-        await query.edit_message_text("📎 أرسل رابط الحساب:")
-        return
-
-    # اختيار الدفع
-    if data.startswith("pay_"):
-        context.user_data["payment"] = data
-
-        if data == "pay_sh":
-            text = (
-                "💰 الدفع عبر شام كاش\n"
-                "حوّل المبلغ على الكود:\n"
-                "`58c2f6fb44d2c954f450a8ed456dc5ab`\n"
-                "📸 بعد التحويل:\n"
-                "- أرسل صورة الإيصال\n"
-                "- أرسل رقم العملية\n"
-                "⚠️ أي خطأ بالمعلومات قد يؤدي لفقدان المبلغ"
-            )
-        else:  # pay_sy
-            text = (
-                "📱 الدفع عبر سيريتيل كاش\n"
-                "حوّل المبلغ إلى الرقم:\n"
-                "`0985718680`\n"
-                "📸 بعد التحويل:\n"
-                "- أرسل صورة الإيصال\n"
-                "- أرسل رقم العملية\n"
-                "⚠️ أي خطأ بالمعلومات قد يؤدي لفقدان المبلغ"
-            )
-        await query.edit_message_text(text, parse_mode='Markdown')
-        return
-
-    # أزرار الأدمن
-    if data.startswith(("accept_", "reject_", "done_", "del_")):
-        order_id = int(data.split("_")[1])
-        if order_id not in orders:
-            return
-
-        if data.startswith("accept"):
-            orders[order_id]["status"] = "تم الدفع"
-            await query.edit_message_caption(query.message.caption + "\n✅ تم تأكيد الدفع")
-            await context.bot.send_message(
-                chat_id=orders[order_id]["user"],
-                text=f"✅ تم تأكيد دفعك لطلب #{order_id}"
-            )
-        elif data.startswith("reject"):
-            orders[order_id]["status"] = "مرفوض"
-            await query.edit_message_caption(query.message.caption + "\n❌ تم رفض الدفع")
-            await context.bot.send_message(
-                chat_id=orders[order_id]["user"],
-                text=f"❌ تم رفض طلب #{order_id} — أي خطأ بالمعلومات قد يؤدي لفقدان المبلغ"
-            )
-        elif data.startswith("done"):
-            orders[order_id]["status"] = "تم التنفيذ"
-            await query.edit_message_caption(query.message.caption + "\n🚀 تم التنفيذ")
-            await context.bot.send_message(
-                chat_id=orders[order_id]["user"],
-                text=f"🚀 تم تنفيذ طلبك #{order_id}"
-            )
-        elif data.startswith("del"):
-            orders[order_id]["status"] = "تم التسليم"
-            await query.edit_message_caption(query.message.caption + "\n📦 تم التسليم")
-            await context.bot.send_message(
-                chat_id=orders[order_id]["user"],
-                text=f"📦 تم تسليم طلبك #{order_id}"
-            )
-        return
-
-# --- استقبال النص ---
-async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if "service" in context.user_data and "link" not in context.user_data:
-        context.user_data["link"] = update.message.text
-        kb = [
-            [InlineKeyboardButton("💰 شام كاش", callback_data="pay_sh")],
-            [InlineKeyboardButton("📱 سيريتيل كاش", callback_data="pay_sy")]
-        ]
-        await update.message.reply_text("اختر طريقة الدفع:", reply_markup=InlineKeyboardMarkup(kb))
-        return
-    elif "payment" in context.user_data and "transaction" not in context.user_data:
-        context.user_data["transaction"] = update.message.text
-        await update.message.reply_text("📸 الآن أرسل صورة الإيصال:")
-        return
+def get_or_create_user(user_id, username):
+    conn = sqlite3.connect('bot_database.db')
+    cursor = conn.cursor()
+    cursor.execute('SELECT balance FROM users WHERE user_id = ?', (user_id,))
+    row = cursor.fetchone()
+    
+    if row is None:
+        cursor.execute('INSERT INTO users (user_id, username, balance) VALUES (?, ?, ?)', (user_id, username, 5))
+        conn.commit()
+        balance = 5
     else:
-        await update.message.reply_text("⚠️ أرسل صورة الإيصال فقط")
+        balance = row[0]
+        
+    conn.close()
+    return balance
 
-# --- استقبال الصورة ---
-async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    global order_id_counter
-    if "transaction" not in context.user_data:
-        await update.message.reply_text("⚠️ أرسل رقم العملية أولاً")
-        return
-
-    order_id = order_id_counter
-    order_id_counter += 1
-
-    orders[order_id] = {
-        "user": update.message.from_user.id,
-        "name": update.message.from_user.full_name,
-        "service": context.user_data["service"],
-        "link": context.user_data["link"],
-        "payment": context.user_data["payment"],
-        "transaction": context.user_data["transaction"],
-        "status": "بانتظار الدفع"
-    }
-
-    caption = (
-        f"🚨 طلب جديد #{order_id}\n"
-        f"👤 {orders[order_id]['name']}\n"
-        f"📦 خدمة: {orders[order_id]['service']}\n"
-        f"🔗 رابط: {orders[order_id]['link']}\n"
-        f"💳 العملية: {orders[order_id]['transaction']}\n"
-        f"💰 الدفع: {'شام كاش' if context.user_data['payment']=='pay_sh' else 'سيريتيل كاش'}"
+# --- 2. أوامر البوت ---
+async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user = update.effective_user
+    balance = get_or_create_user(user.id, user.username)
+    
+    welcome_text = (
+        f"أهلاً بك يا {user.first_name} في بوت توليد المستندات الذكي! 📄✨\n\n"
+        f"هذا البوت يساعدك على إنشاء ملفات Word و Excel منسقة واحترافية خلال ثوانٍ.\n\n"
+        f"💰 رصيدك الحالي: **{balance} عملة**\n\n"
+        f"الأوامر المتاحة:\n"
+        f"/balance - لعرض رصيدك\n"
+        f"/help - لمعرفة طريقة الاستخدام"
     )
+    await update.message.reply_text(welcome_text, parse_mode="Markdown")
 
-    kb = [[
-        InlineKeyboardButton("✅ تأكيد الدفع", callback_data=f"accept_{order_id}"),
-        InlineKeyboardButton("❌ رفض الدفع", callback_data=f"reject_{order_id}")
-    ],[
-        InlineKeyboardButton("🚀 تم التنفيذ", callback_data=f"done_{order_id}"),
-        InlineKeyboardButton("📦 تم التسليم", callback_data=f"del_{order_id}")
-    ]]
+async def balance_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user = update.effective_user
+    balance = get_or_create_user(user.id, user.username)
+    await update.message.reply_text(f"💰 رصيدك الحالي هو: **{balance} عملة**", parse_mode="Markdown")
 
-    await context.bot.send_photo(
-        chat_id=ADMIN_ID,
-        photo=update.message.photo[-1].file_id,
-        caption=caption,
-        reply_markup=InlineKeyboardMarkup(kb)
+async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    help_text = (
+        "طريقة الاستخدام بسيطة جداً:\n"
+        "فقط اكتب طلبك بشكل واضح (مثلاً: ابحث لي عن كذا أو أنشئ جدول بيانات كذا)، وسيقوم البوت بتجهيز الملف لك مباشرة مقابل خصم عملة من رصيدك."
     )
+    await update.message.reply_text(help_text)
 
-    await update.message.reply_text("⏳ تم إرسال طلبك، بانتظار التأكيد")
-    context.user_data.clear()
-
-# --- تشغيل البوت ---
+# --- 3. تشغيل البوت ---
 def main():
-    app = Application.builder().token(TOKEN).build()
-    app.add_handler(CommandHandler("start", start))
-    app.add_handler(CallbackQueryHandler(buttons))
-    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text))
-    app.add_handler(MessageHandler(filters.PHOTO, handle_photo))
-    print("🔥 البوت الكامل شغال")
-    app.run_polling()
+    init_db()
+    
+    # بناء تطبيق البوت
+    application = Application.builder().token(TOKEN).build()
+
+    # ربط الأوامر بالدوال
+    application.add_handler(CommandHandler("start", start_command))
+    application.add_handler(CommandHandler("balance", balance_command))
+    application.add_handler(CommandHandler("help", help_command))
+
+    print("Bot is starting...")
+    # بدء تشغيل البوت بنظام Polling
+    application.run_polling()
 
 if __name__ == "__main__":
     main()
+    
